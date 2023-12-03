@@ -7,14 +7,16 @@ import pygame
 import carla
 import sys
 from hud import HUD
-from camera import DrivingViewCamera
+from camera import DrivingViewCamera, DepthCamera
 from controller import KeyboardControl
+from controller import SteeringWheelControl
+# from old_controller import KeyboardControl
 
 from utils import get_actor_blueprints, get_actor_display_name
 
 def argparser():
     argparser = argparse.ArgumentParser(
-        description='CARLA experiment EgoCar')
+        description='CARLA experiment vehicle control')
     
     argparser.add_argument(
         '-v', '--verbose',
@@ -65,15 +67,21 @@ def argparser():
         default=2.2,
         type=float,
         help='Gamma correction of the camera (default: 2.2)')
+    argparser.add_argument(
+        '--spawn_point_idx',
+        default=None,
+        type=int,
+        help='spawn point index (default: None --> random)')
     
     return argparser.parse_args()
 
 
-class EgoVehicleWorld(object):
+class World(object):
     def __init__(self, carla_world, hud, args) -> None:
         self.world = carla_world
         self.sync = args.sync
         self.actor_role_name = args.rolename
+        self.spawn_point_idx = args.spawn_point_idx
 
         try:
             self.map = self.world.get_map()
@@ -87,11 +95,11 @@ class EgoVehicleWorld(object):
         self.player = None
 
         # Define Sensors
-        self.collision_sensor = None
-        self.lane_invasion_sensor = None
-        self.gnss_sensor = None
-        self.imu_sensor = None
-        self.radar_sensor = None
+        # self.collision_sensor = None
+        # self.lane_invasion_sensor = None
+        # self.gnss_sensor = None
+        # self.imu_sensor = None
+        # self.radar_sensor = None
 
         # Define Driving View Camera
         self.driving_view_camera = None
@@ -100,25 +108,19 @@ class EgoVehicleWorld(object):
         self._actor_generation = args.generation
         self._gamma = args.gamma
 
+        self.player_max_speed = 1.589
+        self.player_max_speed_fast = 3.713
+
         self.restart()
 
         self.world.on_tick(hud.on_world_tick) # Register the tick function of the hud to the world tick event.
 
-        # TODO: Record the simulation if the recording is enabled.
-        self.recording_enabled = False
-        self.recording_start = 0
-        self.constant_velocity_enabled = False
-        self.show_vehicle_telemetry = False
-        self.doors_are_open = False
-        # self.current_map_layer = 0
 
 
-
-    
     def restart(self) -> None:
         self.player_max_speed = 1.589
         self.player_max_speed_fast = 3.713
-
+        
         # Keep same driving view camera config if already exists.
         driving_view_index = self.driving_view_camera.index if self.driving_view_camera is not None else 0
         cam_pos_index = self.driving_view_camera.transform_index if self.driving_view_camera is not None else 0
@@ -127,7 +129,9 @@ class EgoVehicleWorld(object):
         blueprint_list = get_actor_blueprints(self.world, self._actor_filter, self._actor_generation)
         if not blueprint_list:
             raise ValueError("Couldn't find any blueprints with the specified filters")
+        
         blueprint = blueprint_list[0] # Select the first blueprint (Mercedes-Benz C-Class). TODO: Make this configurable.
+
         blueprint.set_attribute('role_name', self.actor_role_name) # Set the role name of the vehicle.
         if blueprint.has_attribute('terramechanics'):
             blueprint.set_attribute('terramechanics', 'true')
@@ -153,7 +157,6 @@ class EgoVehicleWorld(object):
             spawn_point.rotation.pitch = 0.0
             self.destroy()
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
-            self.show_vehicle_telemetry = False
             self.modify_vehicle_physics(self.player)
         while self.player is None:
             if not self.map.get_spawn_points():
@@ -161,10 +164,17 @@ class EgoVehicleWorld(object):
                 print('Please add some Vehicle Spawn Point to your UE4 scene.')
                 sys.exit(1)
             spawn_points = self.map.get_spawn_points()
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform() #TODO: ??
-            # spawn_point = spawn_points[0] if spawn_points else carla.Transform() # Spawn the player at the first spawn point. TODO: Make this configurable.
+
+            if self.spawn_point_idx != None:
+                # Spawn the player at the specific spawn point. TODO: Make this configurable.
+                spawn_point = spawn_points[self.spawn_point_idx] if spawn_points else carla.Transform()
+            else:
+                spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform() #TODO: ??
+
+            # print(spawn_points.index(spawn_point))
+
+
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
-            self.show_vehicle_telemetry = False
             self.modify_vehicle_physics(self.player)
         
         # Set up Driving View Camera
@@ -172,10 +182,13 @@ class EgoVehicleWorld(object):
         self.driving_view_camera.transform_index = cam_pos_index
         self.driving_view_camera.set_sensor(driving_view_index, notify=False)
 
+        # TODO: Set up the sensors.
+        self.depth_sensor_camera = DepthCamera(self.player, self.hud, self._gamma)
+        self.depth_sensor_camera.transform_index = 0
+        self.depth_sensor_camera.set_sensor(0, notify=False)
+
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
-
-        # TODO: Set up the sensors.
 
         if self.sync:
             self.world.tick()
@@ -249,8 +262,9 @@ def gameloop(args):
         pygame.display.flip()
 
         hud = HUD(args.width, args.height)
-        world = EgoVehicleWorld(sim_world, hud, args)
-        controller = KeyboardControl(world, args.autopilot)
+        world = World(sim_world, hud, args)
+        key_controller = KeyboardControl(world, args.autopilot)
+        js_controller = SteeringWheelControl(world, args.autopilot)
 
 
         if args.sync:
@@ -266,7 +280,9 @@ def gameloop(args):
             clock.tick_busy_loop(60)
 
             #TODO: Check Input Signal from Controller
-            if controller.parse_events(client, world, clock, args.sync):
+            # if key_controller.parse_events(clock, args.sync):
+            #     return
+            if js_controller.parse_events():
                 return
 
             world.tick(clock)
@@ -277,9 +293,6 @@ def gameloop(args):
     finally:
         if original_settings:
             sim_world.apply_settings(original_settings)
-
-        if (world and world.recording_enabled):
-            client.stop_recorder()
 
         if world is not None:
             world.destroy()

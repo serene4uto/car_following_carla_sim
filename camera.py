@@ -6,7 +6,7 @@ import carla
 from carla import ColorConverter as cc       
 
 class CameraManager(object):
-    def __init__(self, parent_actor, hud):
+    def __init__(self, parent_actor, hud, gamma_correction):
         self.sensor = None
         self.surface = None
         self._parent = parent_actor
@@ -17,6 +17,8 @@ class CameraManager(object):
         
         self._camera_transforms = None # need to be set in the subclass
         self.sensors = None # need to be set in the subclass
+
+        self.gamma_correction = gamma_correction
 
         self.index = None
         # TODO: ??
@@ -29,6 +31,8 @@ class CameraManager(object):
                 bp = bp_library.find(sensor_spec[0])
                 bp.set_attribute('image_size_x', str(self.hud.dim[0]))
                 bp.set_attribute('image_size_y', str(self.hud.dim[1]))
+                if bp.has_attribute('gamma'):
+                    bp.set_attribute('gamma', str(self.gamma_correction))
                 for attr_name, attr_value in sensor_spec[3].items():
                     bp.set_attribute(attr_name, attr_value)
                 sensor_spec.append(bp)
@@ -92,6 +96,16 @@ class CameraManager(object):
             array = array[:, :, :3]
             array = array[:, :, ::-1]
             self.surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
+        elif self.sensors[self.index][0].startswith('sensor.camera.depth'):
+            image.convert(self.sensors[self.index][1])
+            array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+            array = np.reshape(array, (image.height, image.width, 4))
+            array = array[:, :, :3]
+            array = array[:, :, ::-1]
+            # print(array)
+
+
+
         else:
             image.convert(self.sensors[self.index][1])
             array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
@@ -104,9 +118,40 @@ class CameraManager(object):
 
 
 
+
 class DrivingViewCamera(CameraManager):
     def __init__(self, parent_actor, hud, gamma_correction):
-        super().__init__(parent_actor, hud)
+        super().__init__(parent_actor, hud, gamma_correction)
+
+        bound_x = 0.5 + self._parent.bounding_box.extent.x
+        bound_y = 0.5 + self._parent.bounding_box.extent.y
+        bound_z = 0.5 + self._parent.bounding_box.extent.z
+        Attachment = carla.AttachmentType
+
+        # Define Driving View Positions
+        self._camera_transforms = [
+            # (carla.Transform(carla.Location(x=+0.8*bound_x, y=+0.0*bound_y, z=1.3*bound_z)), Attachment.Rigid),
+            (carla.Transform(carla.Location(x=+(0.22)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
+            (carla.Transform(carla.Location(x=+(-0.0)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
+            (carla.Transform(carla.Location(x=-2.0*bound_x, y=+0.0*bound_y, z=2.0*bound_z), carla.Rotation(pitch=8.0)), Attachment.SpringArmGhost),
+            (carla.Transform(carla.Location(x=bound_x + 0.05, z=bound_z+0.05), carla.Rotation(pitch=5)), Attachment.Rigid),
+            
+        ]
+
+        # Define Sensors for Driving View
+        self.sensors = [
+            ['sensor.camera.rgb', cc.Raw, 'Windshield Camera RGB', {
+                'fov': '110',
+            }],
+            ['sensor.camera.rgb', cc.Raw, 'Camera RGB', {}],
+        ]
+
+        self.get_sensor_spec()
+
+
+class DepthCamera(CameraManager):
+    def __init__(self, parent_actor, hud, gamma_correction):
+        super().__init__(parent_actor, hud, gamma_correction)
 
         bound_x = 0.5 + self._parent.bounding_box.extent.x
         bound_y = 0.5 + self._parent.bounding_box.extent.y
@@ -115,14 +160,13 @@ class DrivingViewCamera(CameraManager):
 
         # Define Camera Positions
         self._camera_transforms = [
-            (carla.Transform(carla.Location(x=+(-0.0)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
-            (carla.Transform(carla.Location(x=-2.0*bound_x, y=+0.0*bound_y, z=2.0*bound_z), carla.Rotation(pitch=8.0)), Attachment.SpringArmGhost),
+            (carla.Transform(carla.Location(x=+0.8*bound_x, y=+0.0*bound_y, z=1.3*bound_z)), Attachment.Rigid),
         ]
 
-        # Define Sensors
+        # Define Sensors for Camera
         self.sensors = [
-            ['sensor.camera.rgb', cc.Raw, 'Camera RGB', {}],
+            ['sensor.camera.depth', cc.LogarithmicDepth, 'Camera Depth (Logarithmic Gray Scale)', {}],
         ]
-
         self.get_sensor_spec()
+        
 

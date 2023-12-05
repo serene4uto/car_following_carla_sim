@@ -8,9 +8,12 @@ import carla
 import sys
 from hud import HUD
 from camera import DrivingViewCamera, DepthCamera
-from controller import KeyboardControl
-from controller import SteeringWheelControl
+
+# from controller import KeyboardControl
+# from controller import SteeringWheelControl
 # from old_controller import KeyboardControl
+
+from controller.vehicle_controller import VehicleController
 
 from utils import get_actor_blueprints, get_actor_display_name
 
@@ -236,6 +239,8 @@ def gameloop(args):
     world = None
     original_settings = None
 
+    leading_car = None
+
     try:
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
@@ -263,8 +268,9 @@ def gameloop(args):
 
         hud = HUD(args.width, args.height)
         world = World(sim_world, hud, args)
-        key_controller = KeyboardControl(world, args.autopilot)
-        js_controller = SteeringWheelControl(world, args.autopilot)
+        v_controller = VehicleController(world, args.autopilot, 
+                                         js_cfg_yaml='config/steering_wheel_default.yaml', 
+                                         kb_cfg_yaml='config/keyboard_default.yaml')
 
 
         if args.sync:
@@ -274,21 +280,28 @@ def gameloop(args):
 
         clock = pygame.time.Clock()
 
+
+
+        # Instanciating the vehicle to which we attached the sensors
+        bp = sim_world.get_blueprint_library().filter('charger_2020')[0]
+        leading_car = sim_world.try_spawn_actor(bp, sim_world.get_map().get_spawn_points()[1])
+        leading_car.set_autopilot(True)
+
+
+
         while True:
             if args.sync:
                 sim_world.tick()
             clock.tick_busy_loop(60)
 
             #TODO: Check Input Signal from Controller
-            # if key_controller.parse_events(clock, args.sync):
-            #     return
-            if js_controller.parse_events():
+            if v_controller.parse_events(clock, args.sync):
                 return
 
             world.tick(clock)
             world.render(display)
             pygame.display.flip()
-
+ 
 
     finally:
         if original_settings:
@@ -296,6 +309,9 @@ def gameloop(args):
 
         if world is not None:
             world.destroy()
+
+            # carla.command.DestroyActor(leading_car)
+
 
         pygame.quit()
 

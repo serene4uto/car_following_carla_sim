@@ -1,0 +1,6 @@
+throttle_key: K_w
+brake_key: K_s
+steer_left_key: K_a
+steer_right_key: K_d
+reverse_key: K_q
+handbrake_key: K_SPACE

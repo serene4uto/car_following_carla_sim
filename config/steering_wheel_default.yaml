@@ -1,0 +1,8 @@
+# Axis
+steer_axis: 0
+throttle_axis: 5
+brake_axis: 4
+
+# Buttons
+reverse_button: 1
+handbrake_button: 0

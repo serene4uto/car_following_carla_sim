@@ -1,8 +1,7 @@
 import carla
 import pygame
 import pygame.locals as pgl
-from configparser import ConfigParser
-import yaml
+
 import math
 
 import logging
@@ -12,8 +11,7 @@ def s2k(key_str):
 
 class VehicleController(object):
     def __init__(self, vehicle_world, start_in_autopilot,
-                 js_cfg_yaml='steering_wheel_default.yaml',
-                 kb_cfg_yaml='keyboard_default.yaml'):
+                 js_cfg, kb_cfg):
         self._vehicle_world = vehicle_world
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
@@ -32,9 +30,9 @@ class VehicleController(object):
 
         # self._vehicle_world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
-        # initialize keyboard devices\
-        with open(kb_cfg_yaml, 'r') as f:
-            self.kb_cfg = yaml.load(f, Loader=yaml.FullLoader)
+
+        self.kb_cfg = kb_cfg
+        self.js_cfg = js_cfg
 
         # initialize joy stick devices
         pygame.joystick.init()
@@ -46,9 +44,7 @@ class VehicleController(object):
         self._joystick = pygame.joystick.Joystick(0)
         self._joystick.init()
 
-        # load joystick config
-        with open(js_cfg_yaml, 'r') as f:
-            self.js_cfg = yaml.load(f, Loader=yaml.FullLoader)
+
 
 
     @staticmethod
@@ -145,14 +141,16 @@ class VehicleController(object):
         K1 = 1.0  # 0.55
         steerCmd = K1 * math.tan(1.1 * jsInputs[self.js_cfg['steer_axis']])
 
-        # For the throttle and brake, we need to map the range [-1, 1] to [0, 1]
-        throttleCmd = (jsInputs[self.js_cfg['throttle_axis']] + 1) /2
+        K2 = 1.6  # 1.6
+        throttleCmd = K2 + (2.05 * math.log10(
+            -0.7 * jsInputs[self.js_cfg['throttle_axis']] + 1.4) - 1.2) / 0.92
         if throttleCmd <= 0:
             throttleCmd = 0
         elif throttleCmd > 1:
             throttleCmd = 1
 
-        brakeCmd = (jsInputs[self.js_cfg['brake_axis']] + 1) /2
+        brakeCmd = 1.6 + (2.05 * math.log10(
+            -0.7 * jsInputs[self.js_cfg['brake_axis']] + 1.4) - 1.2) / 0.92
         if brakeCmd <= 0:
             brakeCmd = 0
         elif brakeCmd > 1:

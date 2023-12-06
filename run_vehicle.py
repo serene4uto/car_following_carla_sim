@@ -7,15 +7,11 @@ import pygame
 import carla
 import sys
 from hud import HUD
-from camera import DrivingViewCamera, DepthCamera
 
-# from controller import KeyboardControl
-# from controller import SteeringWheelControl
-# from old_controller import KeyboardControl
+import yaml
 
 from controller.vehicle_controller import VehicleController
-
-from utils import get_actor_blueprints, get_actor_display_name
+from world.vehicle_world import VehicleWorld
 
 def argparser():
     argparser = argparse.ArgumentParser(
@@ -56,20 +52,10 @@ def argparser():
         default='vehicle.*',
         help='actor filter (default: "vehicle.*")')
     argparser.add_argument(
-        '--generation',
-        metavar='G',
-        default='2',
-        help='restrict to certain actor generation (values: "1","2","All" - default: "2")')
-    argparser.add_argument(
         '--rolename',
         metavar='NAME',
         default='hero',
         help='actor role name (default: "hero")')
-    argparser.add_argument(
-        '--gamma',
-        default=2.2,
-        type=float,
-        help='Gamma correction of the camera (default: 2.2)')
     argparser.add_argument(
         '--spawn_point_idx',
         default=None,
@@ -79,157 +65,7 @@ def argparser():
     return argparser.parse_args()
 
 
-class World(object):
-    def __init__(self, carla_world, hud, args) -> None:
-        self.world = carla_world
-        self.sync = args.sync
-        self.actor_role_name = args.rolename
-        self.spawn_point_idx = args.spawn_point_idx
 
-        try:
-            self.map = self.world.get_map()
-        except RuntimeError as error:
-            print('RuntimeError: {}'.format(error))
-            print('  The server could not send the OpenDRIVE (.xodr) file:')
-            print('  Make sure it exists, has the same name of your town, and is correct.')
-            sys.exit(1)
-
-        self.hud = hud
-        self.player = None
-
-        # Define Sensors
-        # self.collision_sensor = None
-        # self.lane_invasion_sensor = None
-        # self.gnss_sensor = None
-        # self.imu_sensor = None
-        # self.radar_sensor = None
-
-        # Define Driving View Camera
-        self.driving_view_camera = None
-
-        self._actor_filter = args.filter
-        self._actor_generation = args.generation
-        self._gamma = args.gamma
-
-        self.player_max_speed = 1.589
-        self.player_max_speed_fast = 3.713
-
-        self.restart()
-
-        self.world.on_tick(hud.on_world_tick) # Register the tick function of the hud to the world tick event.
-
-
-
-    def restart(self) -> None:
-        self.player_max_speed = 1.589
-        self.player_max_speed_fast = 3.713
-        
-        # Keep same driving view camera config if already exists.
-        driving_view_index = self.driving_view_camera.index if self.driving_view_camera is not None else 0
-        cam_pos_index = self.driving_view_camera.transform_index if self.driving_view_camera is not None else 0
-
-        # Get a vehicle blueprint and set parameters.
-        blueprint_list = get_actor_blueprints(self.world, self._actor_filter, self._actor_generation)
-        if not blueprint_list:
-            raise ValueError("Couldn't find any blueprints with the specified filters")
-        
-        blueprint = blueprint_list[0] # Select the first blueprint (Mercedes-Benz C-Class). TODO: Make this configurable.
-
-        blueprint.set_attribute('role_name', self.actor_role_name) # Set the role name of the vehicle.
-        if blueprint.has_attribute('terramechanics'):
-            blueprint.set_attribute('terramechanics', 'true')
-        if blueprint.has_attribute('color'):
-            color = random.choice(blueprint.get_attribute('color').recommended_values)
-            blueprint.set_attribute('color', color)
-        if blueprint.has_attribute('driver_id'):
-            driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
-            blueprint.set_attribute('driver_id', driver_id)
-        if blueprint.has_attribute('is_invincible'):
-            blueprint.set_attribute('is_invincible', 'true')
-        
-        # set the max speed
-        if blueprint.has_attribute('speed'):
-            self.player_max_speed = float(blueprint.get_attribute('speed').recommended_values[1])
-            self.player_max_speed_fast = float(blueprint.get_attribute('speed').recommended_values[2])
-
-        # Spawn the player.
-        if self.player is not None:
-            spawn_point = self.player.get_transform()
-            spawn_point.location.z += 2.0
-            spawn_point.rotation.roll = 0.0
-            spawn_point.rotation.pitch = 0.0
-            self.destroy()
-            self.player = self.world.try_spawn_actor(blueprint, spawn_point)
-            self.modify_vehicle_physics(self.player)
-        while self.player is None:
-            if not self.map.get_spawn_points():
-                print('There are no spawn points available in your map/town.')
-                print('Please add some Vehicle Spawn Point to your UE4 scene.')
-                sys.exit(1)
-            spawn_points = self.map.get_spawn_points()
-
-            if self.spawn_point_idx != None:
-                # Spawn the player at the specific spawn point. TODO: Make this configurable.
-                spawn_point = spawn_points[self.spawn_point_idx] if spawn_points else carla.Transform()
-            else:
-                spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform() #TODO: ??
-
-            # print(spawn_points.index(spawn_point))
-
-
-            self.player = self.world.try_spawn_actor(blueprint, spawn_point)
-            self.modify_vehicle_physics(self.player)
-        
-        # Set up Driving View Camera
-        self.driving_view_camera = DrivingViewCamera(self.player, self.hud, self._gamma)
-        self.driving_view_camera.transform_index = cam_pos_index
-        self.driving_view_camera.set_sensor(driving_view_index, notify=False)
-
-        # TODO: Set up the sensors.
-        self.depth_sensor_camera = DepthCamera(self.player, self.hud, self._gamma)
-        self.depth_sensor_camera.transform_index = 0
-        self.depth_sensor_camera.set_sensor(0, notify=False)
-
-        actor_type = get_actor_display_name(self.player)
-        self.hud.notification(actor_type)
-
-        if self.sync:
-            self.world.tick()
-        else:
-            self.world.wait_for_tick()
-    
-    def modify_vehicle_physics(self, actor):
-        #If actor is not a vehicle, we cannot use the physics control
-        try:
-            physics_control = actor.get_physics_control()
-            physics_control.use_sweep_wheel_collision = True
-            actor.apply_physics_control(physics_control)
-        except Exception:
-            pass
-    
-    def tick(self, clock) -> None:
-        self.hud.tick(self, clock)
-
-    def render(self, display) -> None:
-        self.driving_view_camera.render(display)
-        self.hud.render(display)
-
-    def destroy(self):
-        # if self.radar_sensor is not None:
-        #     self.toggle_radar()
-        sensors = [
-            self.driving_view_camera.sensor,
-            # self.collision_sensor.sensor,
-            # self.lane_invasion_sensor.sensor,
-            # self.gnss_sensor.sensor,
-            # self.imu_sensor.sensor
-            ]
-        for sensor in sensors:
-            if sensor is not None:
-                sensor.stop()
-                sensor.destroy()
-        if self.player is not None:
-            self.player.destroy()
 
 
 
@@ -239,12 +75,22 @@ def gameloop(args):
     world = None
     original_settings = None
 
-    leading_car = None
+    preceding_vehicle = None
 
+    # Read Input Control Cfg
+    with open('config/steering_wheel_default.yaml', 'r') as f:
+        js_cfg = yaml.load(f, Loader=yaml.FullLoader)
+
+    with open('config/keyboard_default.yaml', 'r') as f:
+        kb_cfg = yaml.load(f, Loader=yaml.FullLoader)
+
+    # Start Carla Client
     try:
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
         sim_world = client.get_world()
+
+        # Setting for world
         if args.sync:
             original_settings = sim_world.get_settings()
             settings = sim_world.get_settings()
@@ -266,11 +112,15 @@ def gameloop(args):
         display.fill((0,0,0))
         pygame.display.flip()
 
+        # Init HUD and World for Ego Vehicle
         hud = HUD(args.width, args.height)
-        world = World(sim_world, hud, args)
+        ego_world = VehicleWorld(sim_world, hud, 
+                             args.sync, args.rolename, args.spawn_point_idx,
+                             args.filter, args.autopilot)
         v_controller = VehicleController(world, args.autopilot, 
-                                         js_cfg_yaml='config/steering_wheel_default.yaml', 
-                                         kb_cfg_yaml='config/keyboard_default.yaml')
+                                         js_cfg=js_cfg, kb_cfg=kb_cfg)
+        
+        # Init for Preceding Vehicle
 
 
         if args.sync:
@@ -282,10 +132,10 @@ def gameloop(args):
 
 
 
-        # Instanciating the vehicle to which we attached the sensors
-        bp = sim_world.get_blueprint_library().filter('charger_2020')[0]
-        leading_car = sim_world.try_spawn_actor(bp, sim_world.get_map().get_spawn_points()[1])
-        leading_car.set_autopilot(True)
+        # # Instanciating the vehicle to which we attached the sensors
+        # bp = sim_world.get_blueprint_library().filter('charger_2020')[0]
+        # leading_car = sim_world.try_spawn_actor(bp, sim_world.get_map().get_spawn_points()[1])
+        # leading_car.set_autopilot(True)
 
 
 
@@ -298,8 +148,8 @@ def gameloop(args):
             if v_controller.parse_events(clock, args.sync):
                 return
 
-            world.tick(clock)
-            world.render(display)
+            ego_world.tick(clock)
+            ego_world.render(display)
             pygame.display.flip()
  
 
@@ -308,9 +158,7 @@ def gameloop(args):
             sim_world.apply_settings(original_settings)
 
         if world is not None:
-            world.destroy()
-
-            # carla.command.DestroyActor(leading_car)
+            ego_world.destroy()
 
 
         pygame.quit()

@@ -131,7 +131,8 @@ class DrivingViewCamera(CameraManager):
         # Define Driving View Positions
         self._camera_transforms = [
             # (carla.Transform(carla.Location(x=+0.8*bound_x, y=+0.0*bound_y, z=1.3*bound_z)), Attachment.Rigid),
-            (carla.Transform(carla.Location(x=+(0.22)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
+            (carla.Transform(carla.Location(x=+(0.2)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
+            (carla.Transform(carla.Location(x=+(0.2)*bound_x, y=+0.0*bound_y, z=1*bound_z), ), Attachment.Rigid),
             (carla.Transform(carla.Location(x=+(-0.0)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
             (carla.Transform(carla.Location(x=-2.0*bound_x, y=+0.0*bound_y, z=2.0*bound_z), carla.Rotation(pitch=8.0)), Attachment.SpringArmGhost),
             (carla.Transform(carla.Location(x=bound_x + 0.05, z=bound_z+0.05), carla.Rotation(pitch=5)), Attachment.Rigid),
@@ -141,7 +142,7 @@ class DrivingViewCamera(CameraManager):
         # Define Sensors for Driving View
         self.sensors = [
             ['sensor.camera.rgb', cc.Raw, 'Windshield Camera RGB', {
-                'fov': '110',
+                'fov': '120',
             }],
             ['sensor.camera.rgb', cc.Raw, 'Camera RGB', {}],
         ]

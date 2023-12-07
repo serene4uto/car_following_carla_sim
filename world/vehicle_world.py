@@ -102,12 +102,12 @@ class VehicleWorld(object):
 
         
         # Set up Driving View Camera
-        self.driving_view_camera = DrivingViewCamera(self.player, self.hud, 2.2)
+        self.driving_view_camera = DrivingViewCamera(self.player, self.hud, 2.2, self.actor_role_name)
         self.driving_view_camera.transform_index = cam_pos_index
         self.driving_view_camera.set_sensor(driving_view_index, notify=False)
 
         # TODO: Set up the sensors.
-        self.depth_sensor_camera = DepthCamera(self.player, self.hud, 2.2)
+        self.depth_sensor_camera = DepthCamera(self.player, self.hud, 2.2, self.actor_role_name)
         self.depth_sensor_camera.transform_index = 0
         self.depth_sensor_camera.set_sensor(0, notify=False)
 

@@ -10,6 +10,8 @@ from hud import HUD
 
 import yaml
 
+import time
+
 from controller.vehicle_controller import VehicleController
 from world.vehicle_world import VehicleWorld
 
@@ -66,15 +68,11 @@ def argparser():
 
 
 
-
-
-
 def gameloop(args):
     pygame.init()
     pygame.font.init()
-    world = None
+    ego_world = None
     original_settings = None
-
     preceding_vehicle = None
 
     # Read Input Control Cfg
@@ -115,9 +113,9 @@ def gameloop(args):
         # Init HUD and World for Ego Vehicle
         hud = HUD(args.width, args.height)
         ego_world = VehicleWorld(sim_world, hud, 
-                             args.sync, args.rolename, args.spawn_point_idx,
-                             args.filter, args.autopilot)
-        v_controller = VehicleController(world, args.autopilot, 
+                                args.sync, args.rolename, args.spawn_point_idx,
+                                args.filter)
+        v_controller = VehicleController(ego_world, args.autopilot, 
                                          js_cfg=js_cfg, kb_cfg=kb_cfg)
         
         # Init for Preceding Vehicle
@@ -131,11 +129,15 @@ def gameloop(args):
         clock = pygame.time.Clock()
 
 
+        time.sleep(10)
 
-        # # Instanciating the vehicle to which we attached the sensors
-        # bp = sim_world.get_blueprint_library().filter('charger_2020')[0]
-        # leading_car = sim_world.try_spawn_actor(bp, sim_world.get_map().get_spawn_points()[1])
-        # leading_car.set_autopilot(True)
+
+
+        # Instanciating the vehicle to which we attached the sensors
+        bp = sim_world.get_blueprint_library().filter('charger_2020')[0]
+        preceding_vehicle = sim_world.try_spawn_actor(bp, sim_world.get_map().get_spawn_points()[1])
+        preceding_vehicle.set_autopilot(True)
+        
 
 
 
@@ -145,8 +147,9 @@ def gameloop(args):
             clock.tick_busy_loop(60)
 
             #TODO: Check Input Signal from Controller
-            if v_controller.parse_events(clock, args.sync):
+            if v_controller.parse_events():
                 return
+            
 
             ego_world.tick(clock)
             ego_world.render(display)
@@ -157,8 +160,9 @@ def gameloop(args):
         if original_settings:
             sim_world.apply_settings(original_settings)
 
-        if world is not None:
+        if ego_world is not None:
             ego_world.destroy()
+            preceding_vehicle.destroy()
 
 
         pygame.quit()

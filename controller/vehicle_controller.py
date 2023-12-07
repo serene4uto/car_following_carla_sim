@@ -60,7 +60,7 @@ class VehicleController(object):
             self._ackermann_control = carla.VehicleAckermannControl()
 
     
-    def parse_events(self, clock, sync_mode):
+    def parse_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True

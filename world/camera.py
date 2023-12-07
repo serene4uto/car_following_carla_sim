@@ -6,7 +6,7 @@ import carla
 from carla import ColorConverter as cc       
 
 class CameraManager(object):
-    def __init__(self, parent_actor, hud, gamma_correction):
+    def __init__(self, parent_actor, hud, gamma_correction, parent_actor_role_name=None):
         self.sensor = None
         self.surface = None
         self._parent = parent_actor
@@ -21,14 +21,20 @@ class CameraManager(object):
         self.gamma_correction = gamma_correction
 
         self.index = None
+
+        self.parent_actor_role_name = parent_actor_role_name
         # TODO: ??
 
-    def get_sensor_spec(self):
+    def init_sensor_spec(self):
         world = self._parent.get_world()
         bp_library = world.get_blueprint_library()
         for sensor_spec in self.sensors:
             if sensor_spec[0].startswith('sensor.camera'):
                 bp = bp_library.find(sensor_spec[0])
+
+                if self.parent_actor_role_name is not None:
+                    bp.set_attribute('role_name', f'{self.parent_actor_role_name}/{sensor_spec[2]}')
+
                 bp.set_attribute('image_size_x', str(self.hud.dim[0]))
                 bp.set_attribute('image_size_y', str(self.hud.dim[1]))
                 if bp.has_attribute('gamma'):
@@ -120,8 +126,8 @@ class CameraManager(object):
 
 
 class DrivingViewCamera(CameraManager):
-    def __init__(self, parent_actor, hud, gamma_correction):
-        super().__init__(parent_actor, hud, gamma_correction)
+    def __init__(self, parent_actor, hud, gamma_correction, parent_actor_role_name=None):
+        super().__init__(parent_actor, hud, gamma_correction, parent_actor_role_name)
 
         bound_x = 0.5 + self._parent.bounding_box.extent.x
         bound_y = 0.5 + self._parent.bounding_box.extent.y
@@ -143,16 +149,16 @@ class DrivingViewCamera(CameraManager):
         self.sensors = [
             ['sensor.camera.rgb', cc.Raw, 'Windshield Camera RGB', {
                 'fov': '120',
-            }],
-            ['sensor.camera.rgb', cc.Raw, 'Camera RGB', {}],
+            },
+            'driving_view_0'],
         ]
 
-        self.get_sensor_spec()
+        self.init_sensor_spec()
 
 
 class DepthCamera(CameraManager):
-    def __init__(self, parent_actor, hud, gamma_correction):
-        super().__init__(parent_actor, hud, gamma_correction)
+    def __init__(self, parent_actor, hud, gamma_correction, parent_actor_role_name=None):
+        super().__init__(parent_actor, hud, gamma_correction, parent_actor_role_name)
 
         bound_x = 0.5 + self._parent.bounding_box.extent.x
         bound_y = 0.5 + self._parent.bounding_box.extent.y
@@ -166,8 +172,8 @@ class DepthCamera(CameraManager):
 
         # Define Sensors for Camera
         self.sensors = [
-            ['sensor.camera.depth', cc.LogarithmicDepth, 'Camera Depth (Logarithmic Gray Scale)', {}],
+            ['sensor.camera.depth', cc.LogarithmicDepth, 'Camera Depth (Logarithmic Gray Scale)', {}, 'depth_camera_0'],
         ]
-        self.get_sensor_spec()
+        self.init_sensor_spec()
         
 

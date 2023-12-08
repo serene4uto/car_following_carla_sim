@@ -77,6 +77,9 @@ class VehicleController(object):
             elif event.type == pygame.KEYDOWN:
                 if event.key == s2k(self.kb_cfg['reverse_key']):
                     self._control_vehicle_toggle_reverse()
+                if event.key == s2k(self.kb_cfg['toggle_hud_key']):
+                    self._vehicle_world.hud.toggle_info()
+                
 
                 
 

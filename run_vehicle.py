@@ -85,7 +85,7 @@ def gameloop(args):
     # Start Carla Client
     try:
         client = carla.Client(args.host, args.port)
-        client.set_timeout(2000.0)
+        client.set_timeout(10.0)
         sim_world = client.get_world()
 
         # Setting for world
@@ -129,7 +129,7 @@ def gameloop(args):
         clock = pygame.time.Clock()
 
 
-        time.sleep(10)
+        # time.sleep(10)
 
 
 

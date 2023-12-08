@@ -102,14 +102,14 @@ class VehicleWorld(object):
 
         
         # Set up Driving View Camera
-        self.driving_view_camera = DrivingViewCamera(self.player, self.hud, 2.2, self.actor_role_name)
+        self.driving_view_camera = DrivingViewCamera(self.player, self.hud, 2.2)
         self.driving_view_camera.transform_index = cam_pos_index
         self.driving_view_camera.set_sensor(driving_view_index, notify=False)
 
         # TODO: Set up the sensors.
-        self.depth_sensor_camera = DepthCamera(self.player, self.hud, 2.2, self.actor_role_name)
-        self.depth_sensor_camera.transform_index = 0
-        self.depth_sensor_camera.set_sensor(0, notify=False)
+        self.depth_camera = DepthCamera(self.player, self.hud, 2.2)
+        self.depth_camera.transform_index = 0
+        self.depth_camera.set_sensor(0, notify=False, listen=False)
 
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
@@ -140,6 +140,8 @@ class VehicleWorld(object):
         #     self.toggle_radar()
         sensors = [
             self.driving_view_camera.sensor,
+            self.depth_camera.sensor,
+            
             # self.collision_sensor.sensor,
             # self.lane_invasion_sensor.sensor,
             # self.gnss_sensor.sensor,

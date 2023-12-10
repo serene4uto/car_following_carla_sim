@@ -48,7 +48,7 @@ class CameraManager(object):
         self.transform_index = (self.transform_index + 1) % len(self._camera_transforms)
         self.set_sensor(self.index, notify=False, force_respawn=True)
 
-    def set_sensor(self, index, notify=True, force_respawn=False, listen=True):
+    def set_sensor(self, index, notify=True, force_respawn=False, render=True):
         index = index % len(self.sensors)
         needs_respawn = True if self.index is None else \
             (force_respawn or (self.sensors[index][2] != self.sensors[self.index][2]))
@@ -63,7 +63,7 @@ class CameraManager(object):
                 attachment_type=self._camera_transforms[self.transform_index][1])
             # We need to pass the lambda a weak reference to self to avoid
             # circular reference.
-            if listen:
+            if render:
                 weak_self = weakref.ref(self)
                 self.sensor.listen(lambda image: CameraManager._parse_image(weak_self, image))
         if notify:
@@ -146,7 +146,7 @@ class DrivingViewCamera(CameraManager):
 
 
 class DepthCamera(CameraManager):
-    def __init__(self, parent_actor, hud, gamma_correction):
+    def __init__(self, parent_actor, hud, gamma_correction, sensor_name):
         super().__init__(parent_actor, hud, gamma_correction)
 
         bound_x = 0.5 + self._parent.bounding_box.extent.x
@@ -156,14 +156,16 @@ class DepthCamera(CameraManager):
 
         # Define Camera Positions
         self._camera_transforms = [
-            (carla.Transform(carla.Location(x=+0.8*bound_x  , y=+0.0*bound_y   , z=1.3*bound_z), ), Attachment.Rigid),
-            (carla.Transform(carla.Location(x=+(0.2)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
+            (carla.Transform(carla.Location(x=+0.8*bound_x  , y=+0.0*bound_y   , z=+1.3*bound_z), ), Attachment.Rigid),
+            (carla.Transform(carla.Location(x=+(0.2)*bound_x, y=-0.25*bound_y, z=+1*bound_z), ), Attachment.Rigid),
         ]
 
         # Define Sensors for Camera
         self.sensors = [
-            ['sensor.camera.depth', cc.Raw, 'DepthCamera_Bumper', {}],
+            ['sensor.camera.depth', cc.Raw, sensor_name, {}],
         ]
+
+
         self.init_sensor_spec(image_size=(1280, 720))
         
 

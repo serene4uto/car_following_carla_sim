@@ -109,7 +109,7 @@ class VehicleWorld(object):
         # TODO: Set up the sensors.
         self.depth_camera = DepthCamera(self.player, self.hud, 2.2)
         self.depth_camera.transform_index = 0
-        self.depth_camera.set_sensor(0, notify=False, listen=False)
+        self.depth_camera.set_sensor(0, notify=False, render=False)
 
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)

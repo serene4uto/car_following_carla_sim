@@ -3,10 +3,12 @@ import pygame
 import weakref
 
 import carla
-from carla import ColorConverter as cc       
+from carla import ColorConverter as cc      
+
+import yaml
 
 class CameraManager(object):
-    def __init__(self, parent_actor, hud, gamma_correction):
+    def __init__(self, parent_actor, hud):
         self.sensor = None
         self.surface = None
         self._parent = parent_actor
@@ -18,11 +20,20 @@ class CameraManager(object):
         self._camera_transforms = None # need to be set in the subclass
         self.sensors = None # need to be set in the subclass
 
-        self.gamma_correction = gamma_correction
+        self.gamma_correction = 2.2
 
         self.index = None
 
-        # TODO: ??
+        with open('mounting_pos.yaml', 'r') as f:
+            self.mpos_coeff = yaml.load(f, Loader=yaml.FullLoader)[self._parent.type_id]
+
+        self.bound_x = self._parent.bounding_box.extent.x
+        self.bound_y = self._parent.bounding_box.extent.y
+        self.bound_z = self._parent.bounding_box.extent.z
+
+
+        
+
 
     def init_sensor_spec(self, image_size):
         world = self._parent.get_world()
@@ -116,28 +127,29 @@ class CameraManager(object):
 
 
 class DrivingViewCamera(CameraManager):
-    def __init__(self, parent_actor, hud, gamma_correction):
-        super().__init__(parent_actor, hud, gamma_correction)
+    def __init__(self, parent_actor, hud, view_pos='Driver_Seat'):
+        super().__init__(parent_actor, hud)
 
-        bound_x = 0.5 + self._parent.bounding_box.extent.x
-        bound_y = 0.5 + self._parent.bounding_box.extent.y
-        bound_z = 0.5 + self._parent.bounding_box.extent.z
         Attachment = carla.AttachmentType
+
+        mpos_coeff = self.mpos_coeff['Driving_View'][view_pos]
 
         # Define Driving View Positions
         self._camera_transforms = [
-            # (carla.Transform(carla.Location(x=+0.8*bound_x, y=+0.0*bound_y, z=1.3*bound_z)), Attachment.Rigid),
-            (carla.Transform(carla.Location(x=+(0.2)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
-            (carla.Transform(carla.Location(x=+(0.2)*bound_x, y=+0.0*bound_y, z=1*bound_z), ), Attachment.Rigid),
-            (carla.Transform(carla.Location(x=+(-0.0)*bound_x, y=-0.25*bound_y, z=1*bound_z), ), Attachment.Rigid),
-            (carla.Transform(carla.Location(x=-2.0*bound_x, y=+0.0*bound_y, z=2.0*bound_z), carla.Rotation(pitch=8.0)), Attachment.SpringArmGhost),
-            (carla.Transform(carla.Location(x=bound_x + 0.05, z=bound_z+0.05), carla.Rotation(pitch=5)), Attachment.Rigid),
-            
+            (   carla.Transform(
+                    carla.Location( x=+mpos_coeff[0][0]*self.bound_x, 
+                                    y=+mpos_coeff[0][1]*self.bound_y, 
+                                    z=+mpos_coeff[0][2]*self.bound_z), 
+                    carla.Rotation(mpos_coeff[1][0], 
+                                   mpos_coeff[1][1], 
+                                   mpos_coeff[1][2]),
+                ), 
+                Attachment.Rigid),
         ]
 
         # Define Sensors for Driving View
         self.sensors = [
-            ['sensor.camera.rgb', cc.Raw, 'RGBCamera_Windshield', {
+            ['sensor.camera.rgb', cc.Raw, f'RGBCamera_{view_pos}', {
                 'fov': '120',
             }],
         ]
@@ -146,23 +158,30 @@ class DrivingViewCamera(CameraManager):
 
 
 class DepthCamera(CameraManager):
-    def __init__(self, parent_actor, hud, gamma_correction, sensor_name):
-        super().__init__(parent_actor, hud, gamma_correction)
+    def __init__(self, parent_actor, hud, attach_pos):
+        super().__init__(parent_actor, hud)
 
-        bound_x = 0.5 + self._parent.bounding_box.extent.x
-        bound_y = 0.5 + self._parent.bounding_box.extent.y
-        bound_z = 0.5 + self._parent.bounding_box.extent.z
         Attachment = carla.AttachmentType
+
+        mpos_coeff = self.mpos_coeff['Sensor_Pose'][attach_pos]
+
 
         # Define Camera Positions
         self._camera_transforms = [
-            (carla.Transform(carla.Location(x=+0.8*bound_x  , y=+0.0*bound_y   , z=+1.3*bound_z), ), Attachment.Rigid),
-            (carla.Transform(carla.Location(x=+(0.2)*bound_x, y=-0.25*bound_y, z=+1*bound_z), ), Attachment.Rigid),
+            (   carla.Transform(
+                    carla.Location( x=+mpos_coeff[0][0]*self.bound_x, 
+                                    y=+mpos_coeff[0][1]*self.bound_y, 
+                                    z=+mpos_coeff[0][2]*self.bound_z), 
+                    carla.Rotation(mpos_coeff[1][0], 
+                                   mpos_coeff[1][1], 
+                                   mpos_coeff[1][2]),
+                ), 
+                Attachment.Rigid),
         ]
 
         # Define Sensors for Camera
         self.sensors = [
-            ['sensor.camera.depth', cc.Raw, sensor_name, {}],
+            ['sensor.camera.depth', cc.Raw, f'DepthCamera_{attach_pos}', {}],
         ]
 
 

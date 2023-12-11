@@ -1,0 +1,6 @@
+vehicle.tesla.model3: 
+  Driving_View: 
+    Driver_Seat: [[0.3, -0.37, 1.6], [0, 0, 0]]
+  Sensor_Pose:
+    Bumper: [[1, 0, 0.5], [0, 0, 0]]
+    Rear: [[-1, 0, 0.5], [0, 180, 0]]

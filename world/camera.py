@@ -77,8 +77,8 @@ class CameraManager(object):
             if render:
                 weak_self = weakref.ref(self)
                 self.sensor.listen(lambda image: CameraManager._parse_image(weak_self, image))
-        if notify:
-            self.hud.notification(self.sensors[index][2])
+        # if notify:
+        #     self.hud.notification(self.sensors[index][2])
         self.index = index
 
     def next_sensor(self):

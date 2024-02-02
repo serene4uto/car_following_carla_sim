@@ -163,3 +163,77 @@ class VehicleWorld(object):
         self._autopilot_enabled = enabled
         self.player.set_autopilot(enabled)
         self.hud.notification('Autopilot %s' % ('On' if enabled else 'Off'))
+
+
+
+class Vehicle(object):
+    def __init__(self, carla_world, role_name, filter='vehicle.*') -> None:
+        self.sensors = []
+        self._autopilot_enabled = False
+        self.driving_view_camera = None
+        self.world = carla_world
+        self.vehicle_role_name = role_name
+        self._actor_filter = filter
+        if 'vehicle' not in self._actor_filter:
+            raise ValueError('The actor filter must contain the keyword \'vehicle\'.')
+        
+        self.restart()
+    
+    def restart(self) -> None:
+        # Keep same driving view camera config if already exists.
+        driving_view_index = self.driving_view_camera.transform_index if self.driving_view_camera is not None else 0
+
+        # Get a vehicle blueprint and set parameters.
+        blueprint = random.choice(self.world.get_blueprint_library().filter(self._actor_filter))
+        blueprint.set_attribute('role_name', self.vehicle_role_name) # Set the role name of the vehicle.
+
+        # Spawn the player.
+        if self.player is not None:
+            spawn_point = self.player.get_transform()
+            spawn_point.location.z += 2.0
+            spawn_point.rotation.roll = 0.0
+            spawn_point.rotation.pitch = 0.0
+            self.destroy()
+            self.player = self.world.try_spawn_actor(blueprint, spawn_point)
+            self.modify_vehicle_physics(self.player)
+        while self.player is None:
+            if not self.map.get_spawn_points():
+                print('There are no spawn points available in your map/town.')
+                print('Please add some Vehicle Spawn Point to your UE4 scene.')
+                sys.exit(1)
+            spawn_points = self.map.get_spawn_points()
+
+            if self.spawn_point_idx != None:
+                # Spawn the player at the specific spawn point. TODO: Make this configurable.
+                spawn_point = spawn_points[self.spawn_point_idx] if spawn_points else carla.Transform()
+            else:
+                spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform() #TODO: ??
+
+            # print(spawn_points.index(spawn_point))
+
+
+            self.player = self.world.try_spawn_actor(blueprint, spawn_point)
+            self.modify_vehicle_physics(self.player)
+        
+        # Set up Driving View Camera
+        self.driving_view_camera = DrivingViewCamera(self.player, self.hud)
+        self.driving_view_camera.transform_index = driving_view_index
+        self.driving_view_camera.set_sensor(0, notify=False) # always RGB
+
+        
+
+    def modify_vehicle_physics(self, actor):
+        #If actor is not a vehicle, we cannot use the physics control
+        try:
+            physics_control = actor.get_physics_control()
+            physics_control.use_sweep_wheel_collision = True
+            actor.apply_physics_control(physics_control)
+        except Exception:
+            pass
+
+    def set_autopilot(self, enabled):
+        self._autopilot_enabled = enabled
+        self.player.set_autopilot(enabled)
+
+    def destroy(self):
+        pass
